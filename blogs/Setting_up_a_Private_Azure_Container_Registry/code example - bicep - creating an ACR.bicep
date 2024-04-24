@@ -1,6 +1,8 @@
+param AzureRegionName string = 'usgovvirginia'
+
 resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: 'acrabc123' // must be globally unique
-  location: 'usgovvirginia' // must be a valid Azure location
+  location: AzureRegionName // must be a valid Azure location
   tags: {
     environment: 'production'
   } // must be a map of strings, optional but good to establish a tagging strategy
