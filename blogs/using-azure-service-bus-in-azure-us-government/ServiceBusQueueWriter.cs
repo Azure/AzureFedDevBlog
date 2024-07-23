@@ -18,7 +18,7 @@ namespace ServiceBusQueueFunc
         }
 
         [Function("ServiceBusQueueWriter")]
-        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "get", "post")] HttpRequest req)
+        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequest req)
         {
             string? fullyQualifiedNamespace = Environment.GetEnvironmentVariable("ServiceBusConnection__fullyQualifiedNamespace");
             string? queueName = Environment.GetEnvironmentVariable("ServiceBusQueueName");
