@@ -1,0 +1,55 @@
+
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "userAssignedIdentity": {
+            "value": "/subscriptions/{subscription_id}/resourcegroups/rg-name/providers/Microsoft.ManagedIdentity/userAssignedIdentities/acr_user_assigned_identity"
+        },
+        "containerGroupName": {
+            "value": "containerGroupName"
+        },
+        "location": {
+            "value": "azure_region"
+        },
+        "containerName": {
+            "value": "containerName"
+        },
+        "containerImage": {
+            "value": "registryname.azurecr.us/image:tag"
+        },
+        "containerCpuCount": {
+            "value": 1
+        },
+        "containerMemoryCount": {
+            "value": 1
+        },
+        "AzDO_URL": {
+            "value": "https://devops.contoso.com/DefaultCollection"
+        },
+        "AzDO_TOKEN": {
+            "value": "AzDOPATToken"
+        },
+        "AzDO_AGENT_NAME": {
+            "value": "AzDOAgentName"
+        },
+        "AzDO_POOL": {
+            "value": "AzDOAgentPool"
+        },
+        "Subnet_ID": {
+            "value": "/subscriptions/{subscription_id}/resourceGroups/rg-name/providers/Microsoft.Network/virtualNetworks/vnet-name/subnets/containerInstanceSubnetName"
+        },
+        "DNS_Servers": {
+            "value": [
+                "10.1.0.4",
+                "10.1.0.5"
+            ]
+        },
+        "DNS_Search_Domain": {
+            "value": "contoso.com"
+        },
+        "ACR_LOGIN_SERVER": {
+            "value": "registryname.azurecr.us"
+        }
+    }
+}

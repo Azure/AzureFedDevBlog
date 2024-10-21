@@ -1,0 +1,145 @@
+# escape=`
+
+###############################################################################
+# MIT License
+#   Copyright (c) Microsoft Corporation.
+#
+#   Permission is hereby granted, free of charge, to any person obtaining a copy
+#   in the Software without restriction, including without limitation the rights
+#   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+#   copies of the Software, and to permit persons to whom the Software is
+#   furnished to do so, subject to the following conditions:
+#
+#    The above copyright notice and this permission notice shall be included in all
+#    copies or substantial portions of the Software.
+#
+#    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+#    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+#    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+#    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+#    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+#    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+#    SOFTWARE
+###############################################################################
+
+# Use the latest Windows Server Core 2022 image.
+FROM mcr.microsoft.com/windows/servercore:ltsc2022 AS build
+###############################################################################
+#Tool Baseline 
+#   Node.js 18.17.1
+#   Visual Studio Build Tools 2022 
+#  .NET SDK 8.0.401
+#   PowerShell 7
+#   Az PowerShell 
+#   AZ CLI - Current
+#   Azcopy 10.11.0
+###############################################################################
+# Restore the default Windows shell for correct batch processing. 
+# Update registry keys to reduce vulnerabilities.
+SHELL ["cmd", "/S", "/C"]
+#CVE-2013-3900
+RUN reg add "HKLM\Software\Microsoft\Cryptography\Wintrust\Config" /v EnableCertPaddingCheck /t REG_SZ /d 1 /f && `
+    reg add "HKLM\Software\Wow6432Node\Microsoft\Cryptography\Wintrust\Config" /v EnableCertPaddingCheck /t REG_SZ /d 1 /f 
+
+#CVE-2023-36884
+RUN reg add "HKLM\SOFTWARE\Policies\Microsoft\Internet Explorer\Main\FeatureControl\FEATURE_BLOCK_CROSS_PROTOCOL_FILE_NAVIGATION" /v Excel.exe /t REG_DWORD /d 1 /f && `
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Internet Explorer\Main\FeatureControl\FEATURE_BLOCK_CROSS_PROTOCOL_FILE_NAVIGATION" /v Graph.exe /t REG_DWORD /d 1 /f && `
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Internet Explorer\Main\FeatureControl\FEATURE_BLOCK_CROSS_PROTOCOL_FILE_NAVIGATION" /v MSAccess.exe /t REG_DWORD /d 1 /f &&`
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Internet Explorer\Main\FeatureControl\FEATURE_BLOCK_CROSS_PROTOCOL_FILE_NAVIGATION" /v MSPub.exe /t REG_DWORD /d 1 /f && `
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Internet Explorer\Main\FeatureControl\FEATURE_BLOCK_CROSS_PROTOCOL_FILE_NAVIGATION" /v Powerpnt.exe /t REG_DWORD /d 1 /f && `
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Internet Explorer\Main\FeatureControl\FEATURE_BLOCK_CROSS_PROTOCOL_FILE_NAVIGATION" /v Visio.exe /t REG_DWORD /d 1 /f && `
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Internet Explorer\Main\FeatureControl\FEATURE_BLOCK_CROSS_PROTOCOL_FILE_NAVIGATION" /v WinProj.exe /t REG_DWORD /d 1 /f && `
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Internet Explorer\Main\FeatureControl\FEATURE_BLOCK_CROSS_PROTOCOL_FILE_NAVIGATION" /v WinWord.exe /t REG_DWORD /d 1 /f &&`
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Internet Explorer\Main\FeatureControl\FEATURE_BLOCK_CROSS_PROTOCOL_FILE_NAVIGATION" /v Wordpad.exe /t REG_DWORD /d 1 /f
+# Use Powershell as the default shell to start windows update service and install .NET 3.5
+
+# Restore the default Windows shell for correct batch processing.
+
+RUN `
+    # Download the Build Tools bootstrapper.
+    curl -SL --output vs_buildtools.exe https://aka.ms/vs/17/release/vs_BuildTools.exe `
+    `
+    # Install Build Tools with the Microsoft.VisualStudio.Workload.AzureBuildTools workload, excluding workloads and components with known issues.
+    && (start /w vs_buildtools.exe --quiet --wait --norestart --nocache `
+        --installPath C:\BuildTools `
+        --add Microsoft.VisualStudio.Workload.AzureBuildTools `
+        --add Microsoft.VisualStudio.Workload.DataBuildTools `
+        --add Microsoft.VisualStudio.Workload.MSBuildTools `
+        --add Microsoft.VisualStudio.Component.SQL.SSDTBuildSku `
+        --remove Microsoft.VisualStudio.Component.Windows10SDK.10240 `
+        --remove Microsoft.VisualStudio.Component.Windows10SDK.10586 `
+        --remove Microsoft.VisualStudio.Component.Windows10SDK.14393 `
+        --remove Microsoft.VisualStudio.Component.Windows81SDK `
+        || IF "%ERRORLEVEL%"=="3010" EXIT 0) `
+    `
+    # Cleanup
+    && del /q vs_buildtools.exe
+
+#Set Shell to powershell to install nodejs
+
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop';$ProgressPreference='silentlyContinue';$ExecutionPolicy='RemoteSigned';"]
+
+#Install PowerShell 7.*
+RUN Invoke-WebRequest -Uri 'https://github.com/PowerShell/PowerShell/releases/download/v7.4.5/PowerShell-7.4.5-win-x64.msi' -OutFile 'PowerShell-7.4.5-win-x64.msi' -UseBasicParsing
+RUN Start-Process -Wait -FilePath 'msiexec.exe' -ArgumentList '/i', 'PowerShell-7.4.5-win-x64.msi', '/quiet', '/norestart'
+RUN Remove-Item -Force 'PowerShell-7.4.5-win-x64.msi'
+
+#Install Az PowerShell Module  
+RUN Install-PackageProvider -Name NuGet -Force
+RUN Install-Module -Name Az -AllowClobber -Force
+
+#Optional install private CA Root and intermediate certificates
+#COPY ./Certificates/ ./azp/Certificates/
+#RUN Import-Certificate -FilePath C:\azp\Certificates\yourRootCert.cer -CertStoreLocation Cert:\LocalMachine\Root; `
+#    Import-Certificate -FilePath C:\azp\Certificates\yourIntermediateCert.cer -CertStoreLocation Cert:\LocalMachine\CA;
+
+# Install .NET SDK
+RUN Invoke-WebRequest -OutFile dotnet.zip -uri https://download.visualstudio.microsoft.com/download/pr/346fb097-97c0-4c83-9af8-ab245644f9da/bf2c626621422428a7e09e0ead5b0747/dotnet-sdk-8.0.401-win-x64.zip; `
+    Expand-Archive dotnet.zip -DestinationPath $Env:ProgramFiles\dotnet; `
+    Remove-Item -Force dotnet.zip
+
+# Set the PATH environment variable to include the .NET SDK
+RUN setx path '%path%;%ProgramFiles%\dotnet'
+RUN [Environment]::SetEnvironmentVariable(\"Path\", $env:Path + \";%ProgramFiles%\dotnet\", [EnvironmentVariableTarget]::Machine)
+
+#Install Az CLI current version
+
+RUN Invoke-WebRequest -Uri "https://aka.ms/installazurecliwindows" -OutFile 'C:\AzureCLI.msi' -UseBasicParsing; `
+    Start-Process msiexec.exe -Wait -ArgumentList '/I C:\AzureCLI.msi /quiet'; `
+    Remove-Item 'C:\AzureCLI.msi'
+
+#Download specified version of nodejs and extract it to C:\nodejs
+RUN Invoke-WebRequest -OutFile 'C:\nodejs.zip' -UseBasicParsing "https://nodejs.org/dist/v22.8.0/node-v22.8.0-win-x64.zip"
+RUN Expand-Archive 'C:\nodejs.zip' -DestinationPath 'C:\'
+RUN Rename-Item "C:\node-v22.8.0-win-x64" c:\nodejs
+RUN Remove-Item C:\nodejs.zip
+WORKDIR C:\nodejs
+
+#Sets the path to nodejs
+RUN SETX path '%path%;C:\nodejs'
+RUN [Environment]::SetEnvironmentVariable(\"Path\", $env:Path + \";C:\nodejs\", [EnvironmentVariableTarget]::Machine)
+
+RUN npm config set registry https://registry.npmjs.org
+
+#Install AzCopy
+RUN Invoke-WebRequest -Uri https://aka.ms/downloadazcopy-v10-windows -OutFile AzCopy.zip ; `
+    Expand-Archive AzCopy.zip -DestinationPath C:\azcopy ; `
+    $azCopyDir = Get-ChildItem -Path C:\azcopy\ -Directory | Select-Object -First 1; `
+    Get-ChildItem -Path "$($azCopyDir.FullName)" | ForEach-Object { Move-Item -Path $_.FullName -Destination C:\azcopy }; `
+    Remove-Item -Recurse -Force $azCopyDir.FullName ; `
+    Remove-Item AzCopy.zip
+#ENV PATH="C:\azcopy;%PATH%"
+RUN SETX path '%path%;C:\azcopy'
+RUN [Environment]::SetEnvironmentVariable(\"Path\", $env:Path + \";C:\azcopy\", [EnvironmentVariableTarget]::Machine)
+
+WORKDIR /azp/
+#Install DOD Root Certificates
+
+SHELL ["cmd", "/S", "/C"]
+
+COPY ./start.ps1 ./
+
+#CMD ["C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", ".\\start.ps1"]
+CMD powershell .\start.ps1
+#CMD ping -t localhost > NUL
+
