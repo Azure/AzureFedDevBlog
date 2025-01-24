@@ -38,6 +38,7 @@ param location string
 param hostingPlanName string 
 param vnetPrivatePortsCount int = 2
 param resourceGroupName string 
+@description('IMPORTANT: User Assigned Managed Identity resource ID e.g. /subscriptions/subId/resourcegroups/rg-name/providers/Microsoft.ManagedIdentity/userAssignedIdentities/identity-name')
 param userAssignedIdentity string
 param appInsightsKey string
 param vNetResourceGroupName string
